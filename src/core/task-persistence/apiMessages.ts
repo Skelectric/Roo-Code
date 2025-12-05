@@ -20,6 +20,8 @@ export type ApiMessage = Anthropic.MessageParam & {
 	text?: string
 	// For OpenRouter reasoning_details array format (used by Gemini 3, etc.)
 	reasoning_details?: any[]
+	// For DeepSeek thinking mode: reasoning_content as a top-level field (not converted to content blocks)
+	reasoning_content?: string
 	// For non-destructive condense: unique identifier for summary messages
 	condenseId?: string
 	// For non-destructive condense: points to the condenseId of the summary that replaces this message

@@ -701,6 +701,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const reasoningSummary = handler.getSummary?.()
 			const reasoningDetails = handler.getReasoningDetails?.()
 
+			// Check if this is DeepSeek thinking mode
+			const modelId = getModelId(this.apiConfiguration)
+			const isDeepSeekThinkingMode = modelId.includes("deepseek-reasoner")
+
 			// Start from the original assistant message
 			const messageWithTs: any = {
 				...message,
@@ -713,9 +717,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				messageWithTs.reasoning_details = reasoningDetails
 			}
 
+			// For DeepSeek thinking mode, store reasoning_content as a top-level field
+			// (not converted to content blocks, as per DeepSeek API format)
+			if (isDeepSeekThinkingMode && reasoning && !reasoningDetails) {
+				messageWithTs.reasoning_content = reasoning
+			}
+
 			// Store reasoning: plain text (most providers) or encrypted (OpenAI Native)
 			// Skip if reasoning_details already contains the reasoning (to avoid duplication)
-			if (reasoning && !reasoningDetails) {
+			// Skip if DeepSeek thinking mode (we store as reasoning_content instead)
+			if (reasoning && !reasoningDetails && !isDeepSeekThinkingMode) {
 				const reasoningBlock = {
 					type: "reasoning",
 					text: reasoning,
