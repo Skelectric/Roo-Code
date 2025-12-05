@@ -159,7 +159,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
 				model: modelId,
-				temperature: this.options.modelTemperature ?? (deepseekReasoner ? DEEP_SEEK_DEFAULT_TEMPERATURE : 0),
+				temperature: deepseekReasoner ? undefined : (this.options.modelTemperature ?? 0),
 				messages: convertedMessages,
 				stream: true as const,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
@@ -174,11 +174,20 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
+			// Prepare create options with Azure AI Inference path and thinking mode parameter
+			const createOptions = isAzureAiInference 
+				? { path: OPENAI_AZURE_AI_INFERENCE_PATH }
+				: {}
+			
+			if (deepseekReasoner) {
+				createOptions.extra_body = { thinking: { type: "enabled" } }
+			}
+
 			let stream
 			try {
 				stream = await this.client.chat.completions.create(
 					requestOptions,
-					isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+					createOptions,
 				)
 			} catch (error) {
 				throw handleOpenAIError(error, this.providerName)
@@ -238,6 +247,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		} else {
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 				model: modelId,
+				temperature: deepseekReasoner ? undefined : (this.options.modelTemperature ?? 0),
 				messages: deepseekReasoner
 					? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 					: enabledLegacyFormat
@@ -253,11 +263,20 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
+			// Prepare create options with Azure AI Inference path and thinking mode parameter
+			const createOptions = this._isAzureAiInference(modelUrl) 
+				? { path: OPENAI_AZURE_AI_INFERENCE_PATH }
+				: {}
+			
+			if (deepseekReasoner) {
+				createOptions.extra_body = { thinking: { type: "enabled" } }
+			}
+
 			let response
 			try {
 				response = await this.client.chat.completions.create(
 					requestOptions,
-					this._isAzureAiInference(modelUrl) ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+					createOptions,
 				)
 			} catch (error) {
 				throw handleOpenAIError(error, this.providerName)
