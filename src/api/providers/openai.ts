@@ -202,24 +202,47 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 					}) as const,
 			)
 
+			// Accumulation state for DeepSeek thinking mode
+			// According to DeepSeek API docs, chunks contain either reasoning_content OR content, not both
+			// However, tool_calls may appear alongside either reasoning_content or content
+			let reasoningAccumulator = ""
+			let isReasoningPhase = true
+			let hasEmittedReasoning = false
+
 			let lastUsage
 
 			for await (const chunk of stream) {
 				const delta = chunk.choices?.[0]?.delta ?? {}
 
+				// Handle reasoning_content accumulation (DeepSeek thinking mode)
+				if ("reasoning_content" in delta && delta.reasoning_content) {
+					reasoningAccumulator += (delta.reasoning_content as string | undefined) || ""
+					isReasoningPhase = true
+					// Note: Continue to process tool_calls and usage in same chunk if present
+				}
+
+				// Handle content - if we were in reasoning phase, emit accumulated reasoning first
 				if (delta.content) {
+					// Transition from reasoning to content phase
+					if (isReasoningPhase && reasoningAccumulator && !hasEmittedReasoning) {
+						yield {
+							type: "reasoning",
+							text: reasoningAccumulator,
+						}
+						hasEmittedReasoning = true
+						reasoningAccumulator = ""
+					}
+					isReasoningPhase = false
+
+					// Process content as usual
 					for (const chunk of matcher.update(delta.content)) {
 						yield chunk
 					}
 				}
 
-				if ("reasoning_content" in delta && delta.reasoning_content) {
-					yield {
-						type: "reasoning",
-						text: (delta.reasoning_content as string | undefined) || "",
-					}
-				}
-
+				// Handle tool calls (can occur during reasoning or content phase)
+				// Note: Reasoning may continue after tool calls, so we don't emit reasoning here
+				// Reasoning will be emitted when transitioning to content phase or at stream end
 				if (delta.tool_calls) {
 					for (const toolCall of delta.tool_calls) {
 						yield {
@@ -234,6 +257,15 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 				if (chunk.usage) {
 					lastUsage = chunk.usage
+				}
+			}
+
+			// Emit any remaining accumulated reasoning content at stream end
+			// This handles cases where stream ends during reasoning phase
+			if (reasoningAccumulator && !hasEmittedReasoning) {
+				yield {
+					type: "reasoning",
+					text: reasoningAccumulator,
 				}
 			}
 
@@ -283,6 +315,15 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			}
 
 			const message = response.choices?.[0]?.message
+
+			// Handle reasoning_content for DeepSeek thinking mode (non-streaming)
+			// Emit reasoning content before tool calls and final content
+			if ("reasoning_content" in message && message.reasoning_content) {
+				yield {
+					type: "reasoning",
+					text: (message.reasoning_content as string | undefined) || "",
+				}
+			}
 
 			if (message?.tool_calls) {
 				for (const toolCall of message.tool_calls) {
