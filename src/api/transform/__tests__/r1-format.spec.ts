@@ -179,4 +179,82 @@ describe("convertToR1Format", () => {
 
 		expect(convertToR1Format(input)).toEqual(expected)
 	})
+
+	describe("reasoning_content clearing", () => {
+		it("should clear reasoning_content from assistant messages", () => {
+			const input: any[] = [
+				{ role: "user", content: "Hello" },
+				{
+					role: "assistant",
+					content: "Hi there",
+					reasoning_content: "Let me think about this...",
+				},
+			]
+
+			const result = convertToR1Format(input)
+
+			expect(result).toEqual([
+				{ role: "user", content: "Hello" },
+				{ role: "assistant", content: "Hi there" },
+			])
+			expect(result[1]).not.toHaveProperty("reasoning_content")
+		})
+
+		it("should clear reasoning_content when merging consecutive assistant messages", () => {
+			const input: any[] = [
+				{ role: "user", content: "Question" },
+				{
+					role: "assistant",
+					content: "First part",
+					reasoning_content: "Reasoning 1",
+				},
+				{
+					role: "assistant",
+					content: "Second part",
+					reasoning_content: "Reasoning 2",
+				},
+			]
+
+			const result = convertToR1Format(input)
+
+			expect(result).toEqual([
+				{ role: "user", content: "Question" },
+				{ role: "assistant", content: "First part\nSecond part" },
+			])
+			expect(result[1]).not.toHaveProperty("reasoning_content")
+		})
+
+		it("should preserve content while clearing reasoning_content", () => {
+			const input: any[] = [
+				{
+					role: "assistant",
+					content: "The final answer",
+					reasoning_content: "Detailed reasoning process",
+				},
+			]
+
+			const result = convertToR1Format(input)
+
+			expect(result[0]).toEqual({
+				role: "assistant",
+				content: "The final answer",
+			})
+			expect(result[0].content).toBe("The final answer")
+			expect(result[0]).not.toHaveProperty("reasoning_content")
+		})
+
+		it("should handle messages without reasoning_content (should still work)", () => {
+			const input: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Hello" },
+				{ role: "assistant", content: "Hi there" },
+			]
+
+			const result = convertToR1Format(input)
+
+			expect(result).toEqual([
+				{ role: "user", content: "Hello" },
+				{ role: "assistant", content: "Hi there" },
+			])
+		})
+	})
 })

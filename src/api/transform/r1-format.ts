@@ -1,6 +1,8 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
+import { clearReasoningContentFromMessages } from "./clear-reasoning-content"
+
 type ContentPartText = OpenAI.Chat.ChatCompletionContentPartText
 type ContentPartImage = OpenAI.Chat.ChatCompletionContentPartImage
 type UserMessage = OpenAI.Chat.ChatCompletionUserMessageParam
@@ -11,12 +13,22 @@ type AnthropicMessage = Anthropic.Messages.MessageParam
 /**
  * Converts Anthropic messages to OpenAI format while merging consecutive messages with the same role.
  * This is required for DeepSeek Reasoner which does not support successive messages with the same role.
+ * 
+ * According to DeepSeek API documentation, `reasoning_content` from previous turns should NOT be
+ * included when sending messages for new turns. This function automatically clears reasoning_content
+ * from assistant messages before conversion to ensure compliance with DeepSeek API requirements.
  *
- * @param messages Array of Anthropic messages
- * @returns Array of OpenAI messages where consecutive messages with the same role are combined
+ * @param messages Array of Anthropic messages (may contain reasoning_content from previous turns)
+ * @returns Array of OpenAI messages where consecutive messages with the same role are combined,
+ *          and reasoning_content has been cleared from assistant messages
  */
 export function convertToR1Format(messages: AnthropicMessage[]): Message[] {
-	return messages.reduce<Message[]>((merged, message) => {
+	// Clear reasoning_content from assistant messages before conversion
+	// This ensures compliance with DeepSeek API requirements that reasoning_content
+	// from previous turns should not be sent in new conversation turns
+	const cleanedMessages = clearReasoningContentFromMessages(messages)
+
+	return cleanedMessages.reduce<Message[]>((merged, message) => {
 		const lastMessage = merged[merged.length - 1]
 		let messageContent: string | (ContentPartText | ContentPartImage)[] = ""
 		let hasImages = false
