@@ -157,6 +157,12 @@ export function getModelParams({
 			params.temperature = undefined
 		}
 
+		// Override temperature for DeepSeek thinking mode (deepseek-reasoner)
+		// API documentation states temperature has no effect in thinking mode
+		if (modelId.includes("deepseek-reasoner")) {
+			params.temperature = undefined
+		}
+
 		return {
 			format,
 			...params,

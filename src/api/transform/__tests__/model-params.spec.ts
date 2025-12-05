@@ -990,4 +990,72 @@ describe("getModelParams", () => {
 			expect(result.reasoningBudget).toBe(8192) // Default thinking tokens
 		})
 	})
+
+	describe("DeepSeek thinking mode temperature handling", () => {
+		const deepseekReasonerModel: ModelInfo = {
+			...baseModel,
+			maxTokens: 65536,
+		}
+
+		const deepseekChatModel: ModelInfo = {
+			...baseModel,
+			maxTokens: 8192,
+		}
+
+		it("should set temperature to undefined for deepseek-reasoner", () => {
+			const result = getModelParams({
+				format: "openai",
+				modelId: "deepseek-reasoner",
+				model: deepseekReasonerModel,
+				settings: {},
+			})
+
+			expect(result.temperature).toBeUndefined()
+			expect(result.format).toBe("openai")
+		})
+
+		it("should set temperature to undefined for deepseek-reasoner even with custom temperature setting", () => {
+			const result = getModelParams({
+				format: "openai",
+				modelId: "deepseek-reasoner",
+				model: deepseekReasonerModel,
+				settings: { modelTemperature: 0.8 },
+			})
+
+			expect(result.temperature).toBeUndefined()
+		})
+
+		it("should use normal temperature handling for deepseek-chat", () => {
+			const result = getModelParams({
+				format: "openai",
+				modelId: "deepseek-chat",
+				model: deepseekChatModel,
+				settings: {},
+			})
+
+			expect(result.temperature).toBe(0) // Default temperature
+		})
+
+		it("should respect custom temperature for deepseek-chat", () => {
+			const result = getModelParams({
+				format: "openai",
+				modelId: "deepseek-chat",
+				model: deepseekChatModel,
+				settings: { modelTemperature: 0.7 },
+			})
+
+			expect(result.temperature).toBe(0.7)
+		})
+
+		it("should not affect other openai models", () => {
+			const result = getModelParams({
+				format: "openai",
+				modelId: "gpt-4",
+				model: baseModel,
+				settings: { modelTemperature: 0.5 },
+			})
+
+			expect(result.temperature).toBe(0.5)
+		})
+	})
 })
