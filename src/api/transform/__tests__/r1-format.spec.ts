@@ -256,5 +256,71 @@ describe("convertToR1Format", () => {
 				{ role: "assistant", content: "Hi there" },
 			])
 		})
+
+		it("should preserve reasoning_content when clearReasoningContent is false", () => {
+			const input: any[] = [
+				{ role: "user", content: "Question" },
+				{
+					role: "assistant",
+					content: "Answer",
+					reasoning_content: "Let me think...",
+				},
+			]
+
+			const result = convertToR1Format(input, false)
+
+			expect(result[1]).toHaveProperty("reasoning_content")
+			expect((result[1] as any).reasoning_content).toBe("Let me think...")
+		})
+
+		it("should clear reasoning_content when clearReasoningContent is true (default)", () => {
+			const input: any[] = [
+				{ role: "user", content: "Question" },
+				{
+					role: "assistant",
+					content: "Answer",
+					reasoning_content: "Let me think...",
+				},
+			]
+
+			const result = convertToR1Format(input, true)
+
+			expect(result[1]).not.toHaveProperty("reasoning_content")
+		})
+
+		it("should preserve reasoning_content during tool call sequences", () => {
+			const input: any[] = [
+				{ role: "user", content: "Get weather" },
+				{
+					role: "assistant",
+					content: "Let me check",
+					reasoning_content: "I need to get the weather",
+					tool_calls: [{ id: "call-1", function: { name: "get_weather", arguments: "{}" } }],
+				},
+			]
+
+			// During tool call continuation, reasoning_content should be preserved
+			const result = convertToR1Format(input, false)
+
+			expect(result[1]).toHaveProperty("reasoning_content")
+			expect((result[1] as any).reasoning_content).toBe("I need to get the weather")
+		})
+
+		it("should clear reasoning_content for new turns (default behavior)", () => {
+			const input: any[] = [
+				{ role: "user", content: "First question" },
+				{
+					role: "assistant",
+					content: "First answer",
+					reasoning_content: "Reasoning for first",
+				},
+				{ role: "user", content: "Second question" },
+			]
+
+			// New turn - reasoning_content should be cleared
+			const result = convertToR1Format(input, true)
+
+			expect(result[1]).not.toHaveProperty("reasoning_content")
+		})
 	})
 })

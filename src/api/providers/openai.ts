@@ -17,6 +17,7 @@ import { XmlMatcher } from "../../utils/xml-matcher"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { convertToSimpleMessages } from "../transform/simple-format"
+import { isNewUserTurn } from "../transform/detect-turn-boundary"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
@@ -108,7 +109,12 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			let convertedMessages
 
 			if (deepseekReasoner) {
-				convertedMessages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
+				// For DeepSeek thinking mode, conditionally clear reasoning_content:
+				// - Clear for new user turns (preserve only final answers)
+				// - Preserve during tool call sequences (required by API)
+				const allMessages = [{ role: "user", content: systemPrompt }, ...messages]
+				const shouldClearReasoning = isNewUserTurn(allMessages)
+				convertedMessages = convertToR1Format(allMessages, shouldClearReasoning)
 			} else if (ark || enabledLegacyFormat) {
 				convertedMessages = [systemMessage, ...convertToSimpleMessages(messages)]
 			} else {
@@ -175,7 +181,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
 			// Prepare create options with Azure AI Inference path and thinking mode parameter
-			const createOptions = isAzureAiInference 
+			const createOptions: { path?: string; extra_body?: { thinking: { type: string } } } = isAzureAiInference 
 				? { path: OPENAI_AZURE_AI_INFERENCE_PATH }
 				: {}
 			
@@ -281,7 +287,14 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				model: modelId,
 				temperature,
 				messages: deepseekReasoner
-					? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
+					? (() => {
+							// For DeepSeek thinking mode, conditionally clear reasoning_content:
+							// - Clear for new user turns (preserve only final answers)
+							// - Preserve during tool call sequences (required by API)
+							const allMessages = [{ role: "user", content: systemPrompt }, ...messages]
+							const shouldClearReasoning = isNewUserTurn(allMessages)
+							return convertToR1Format(allMessages, shouldClearReasoning)
+						})()
 					: enabledLegacyFormat
 						? [systemMessage, ...convertToSimpleMessages(messages)]
 						: [systemMessage, ...convertToOpenAiMessages(messages)],
@@ -296,7 +309,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
 			// Prepare create options with Azure AI Inference path and thinking mode parameter
-			const createOptions = this._isAzureAiInference(modelUrl) 
+			const createOptions: { path?: string; extra_body?: { thinking: { type: string } } } = this._isAzureAiInference(modelUrl) 
 				? { path: OPENAI_AZURE_AI_INFERENCE_PATH }
 				: {}
 			
