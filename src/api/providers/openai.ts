@@ -117,7 +117,66 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 					...messages,
 				]
 				const shouldClearReasoning = isNewUserTurn(allMessages)
+
+				// Debug log PRE-transformation messages
+				console.log(
+					`[DeepSeek Debug] PRE-TRANSFORM allMessages=`,
+					JSON.stringify(
+						allMessages.map((msg) => {
+							const sanitized = { ...msg }
+							if (typeof sanitized.content === "string" && sanitized.content.length > 500) {
+								sanitized.content = sanitized.content.substring(0, 500) + "... [truncated]"
+							} else if (Array.isArray(sanitized.content)) {
+								sanitized.content = sanitized.content.map((part: any) => {
+									if (part.type === "text" && part.text && part.text.length > 500) {
+										return { ...part, text: part.text.substring(0, 500) + "... [truncated]" }
+									}
+									return part
+								})
+							}
+							// Log reasoning_content if present
+							if ("reasoning_content" in sanitized && sanitized.reasoning_content) {
+								const rc = sanitized.reasoning_content as string
+								sanitized.reasoning_content =
+									rc.length > 500 ? rc.substring(0, 500) + "... [truncated]" : rc
+							}
+							return sanitized
+						}),
+						null,
+						2,
+					),
+				)
+
 				convertedMessages = convertToR1Format(allMessages, shouldClearReasoning)
+
+				// Debug log POST-transformation messages
+				console.log(
+					`[DeepSeek Debug] POST-TRANSFORM convertedMessages=`,
+					JSON.stringify(
+						convertedMessages.map((msg) => {
+							const sanitized = { ...msg }
+							if (typeof sanitized.content === "string" && sanitized.content.length > 500) {
+								sanitized.content = sanitized.content.substring(0, 500) + "... [truncated]"
+							} else if (Array.isArray(sanitized.content)) {
+								sanitized.content = sanitized.content.map((part: any) => {
+									if (part.type === "text" && part.text && part.text.length > 500) {
+										return { ...part, text: part.text.substring(0, 500) + "... [truncated]" }
+									}
+									return part
+								})
+							}
+							// Log reasoning_content if present
+							if ("reasoning_content" in sanitized && sanitized.reasoning_content) {
+								const rc = sanitized.reasoning_content as string
+								sanitized.reasoning_content =
+									rc.length > 500 ? rc.substring(0, 500) + "... [truncated]" : rc
+							}
+							return sanitized
+						}),
+						null,
+						2,
+					),
+				)
 			} else if (ark || enabledLegacyFormat) {
 				convertedMessages = [systemMessage, ...convertToSimpleMessages(messages)]
 			} else {
@@ -188,6 +247,62 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
+
+			// Debug logging for interleaved thinking models (similar to DeepSeek sample code)
+			if (supportsInterleavedThinking) {
+				console.log(`[DeepSeek Debug] Sending request to API:`)
+				console.log(`[DeepSeek Debug] model=${modelId}`)
+				console.log(
+					`[DeepSeek Debug] messages=`,
+					JSON.stringify(
+						convertedMessages.map((msg) => {
+							// Sanitize messages for logging - truncate long content
+							const sanitized = { ...msg }
+							if (typeof sanitized.content === "string" && sanitized.content.length > 500) {
+								sanitized.content = sanitized.content.substring(0, 500) + "... [truncated]"
+							}
+							// Log reasoning_content if present
+							if ("reasoning_content" in sanitized && sanitized.reasoning_content) {
+								const rc = sanitized.reasoning_content as string
+								sanitized.reasoning_content =
+									rc.length > 500 ? rc.substring(0, 500) + "... [truncated]" : rc
+							}
+							return sanitized
+						}),
+						null,
+						2,
+					),
+				)
+				// @ts-ignore-next-line - extra_body is not in the type definition but is supported by OpenAI API
+				console.log(`[DeepSeek Debug] extra_body=`, JSON.stringify(requestOptions.extra_body, null, 2))
+				console.log(`[DeepSeek Debug] shouldClearReasoning=${shouldClearReasoning}`)
+
+				// Log the complete request body that will be sent to the API
+				const sanitizedRequestBody = {
+					...requestOptions,
+					messages: convertedMessages.map((msg) => {
+						const sanitized = { ...msg }
+						if (typeof sanitized.content === "string" && sanitized.content.length > 500) {
+							sanitized.content = sanitized.content.substring(0, 500) + "... [truncated]"
+						} else if (Array.isArray(sanitized.content)) {
+							sanitized.content = sanitized.content.map((part: any) => {
+								if (part.type === "text" && part.text && part.text.length > 500) {
+									return { ...part, text: part.text.substring(0, 500) + "... [truncated]" }
+								}
+								return part
+							})
+						}
+						// Log reasoning_content if present
+						if ("reasoning_content" in sanitized && sanitized.reasoning_content) {
+							const rc = sanitized.reasoning_content as string
+							sanitized.reasoning_content =
+								rc.length > 500 ? rc.substring(0, 500) + "... [truncated]" : rc
+						}
+						return sanitized
+					}),
+				}
+				console.log(`[DeepSeek Debug] FINAL REQUEST BODY=`, JSON.stringify(sanitizedRequestBody, null, 2))
+			}
 
 			let stream
 			try {
